@@ -1,6 +1,7 @@
 import time
 from read_file import lire_fichier_vrptw, calculer_matrice_distances
 from algo import generer_solution_initiale_randomisee
+from clarke_wright import generer_solution_clarke_wright
 
 def calculer_distance_totale(solution, matrice_distances):
     """Calcule la distance totale parcourue par tous les camions."""
@@ -39,7 +40,7 @@ def evaluer_performances(chemin_fichier, algorithm, nb_executions=10, K=3, alpha
         # On appelle ton algorithme (Assure-toi de lui passer alpha, beta, gamma si tu les as intégrés)
         solution = algorithm(
             tous_les_clients, depot, matrice_distances, 
-            capacite_max, demandes, fenetres_temps, temps_service, K=K
+            capacite_max, demandes, fenetres_temps, temps_service
         )
         
         # Évaluation de cette exécution
@@ -72,6 +73,16 @@ def evaluer_performances(chemin_fichier, algorithm, nb_executions=10, K=3, alpha
     print(f"Meilleure solution trouvée: {meilleure_solution} avec {min_vehicules_trouve} véhicules et distance {min_distance_trouvee:.2f}")
     print("-" * 50)
     
-    return meilleure_solution, min_vehicules_trouve, min_distance_trouvee
+    return {
+        "Min Vehicules": min(historique_vehicules),
+        "Moyenne Vehicules": moyenne_vehicules,
+        "Max Vehicules": max(historique_vehicules),
+        "Min Distance": min(historique_distances),
+        "Moyenne Distance": moyenne_distances,
+        "Max Distance": max(historique_distances),
+        "Temps Moyen (s)": temps_moyen_par_execution,
+        "Historique Distances": historique_distances # Utile pour la boîte à moustaches
+    }
 
 evaluer_performances('Archive/C101.txt',generer_solution_initiale_randomisee)
+evaluer_performances('Archive/C101.txt',generer_solution_clarke_wright)
