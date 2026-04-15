@@ -10,12 +10,11 @@ from tourGeant import initial_solution_hybrid_split as tour_geant_algorithm
 from regret_algorithm.algo import generer_solution_initiale_randomisee
 
 # Import SA and structures
-from sa_vrptw import (
+from RS_final import (
     simulated_annealing,
     SAConfig,
     Customer,
     Instance,
-    total_cost,
     is_feasible,
 )
 
