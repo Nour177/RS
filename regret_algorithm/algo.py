@@ -1,6 +1,6 @@
 import random
-from seeds import trouver_meilleur_seed
-from est_valide_temps import est_valide_temps
+from .seeds import trouver_meilleur_seed
+from .est_valide_temps import est_valide_temps
 
 def generer_solution_initiale_randomisee(tous_les_clients, depot, matrice_distances, capacite_max, demandes, fenetres_temps, temps_service, K=3):
     """
