@@ -323,7 +323,7 @@ def run_algorithm(algorithm_name: str, customers: list, depot: Client, vehicle_c
         raise ValueError(f"Unknown algorithm: {algorithm_name}")
 
 
-def print_routes(routes: List[List[int]], sa_routes: List[List[int]], inst: Instance):
+def print_routes(routes: List[List[int]], sa_routes: List[List[int]], operator_stats: dict, inst: Instance):
     """Print detailed route information"""
     print("\n" + "="*70)
     print("ROUTES (with depot at start and end):")
@@ -353,6 +353,7 @@ def print_routes(routes: List[List[int]], sa_routes: List[List[int]], inst: Inst
     print("="*70)
     print(f"Total Routes: {len(sa_routes)}")
     print(f"Total Distance: {total_distance:.2f}")
+    print(f"Swapping Stats: {operator_stats}")
     print(f"Total Demand: {total_demand:.1f}")
     print("="*70)
 
@@ -462,7 +463,7 @@ def main():
         print(f"\n{'='*70}")
         print("FINAL SOLUTION (after Simulated Annealing):")
         print("="*70)
-        print_routes(routes, result.best_solution, inst)
+        print_routes(routes, result.best_solution, result.operator_stats, inst)
 
         # Summary
         print(f"\n{'='*70}")
