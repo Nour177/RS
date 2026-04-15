@@ -7,7 +7,7 @@ import statistics
 import time
 
 from nearestNeighbor import initial_solution_nearest_neighbor, read_solomon_file as read_nn
-from algo import generer_solution_initiale_randomisee
+from regret_algorithm.algo import generer_solution_initiale_randomisee
 from read_file import lire_fichier_vrptw, calculer_matrice_distances
 from tourGeant import initial_solution_hybrid_split, read_solomon_file as read_tour_geant
 from solomon_inser import initial_solution_solomon_insertion, read_solomon_file as read_solomon

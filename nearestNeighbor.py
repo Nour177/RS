@@ -123,7 +123,8 @@ if __name__ == "__main__":
 
     for i, route in enumerate(routes):
         load = sum(c.demand for c in route)
-        print(f"Route {i+1} | Load {load} :", [c.id for c in route])
+        route_with_depot = [0] + [c.id for c in route] + [0]
+        print(f"Route {i+1} | Load {load} :", route_with_depot)
 
         current_location = depot
         route_distance = 0
