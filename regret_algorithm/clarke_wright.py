@@ -1,4 +1,4 @@
-from est_valide_temps import est_valide_temps 
+from .est_valide_temps import est_valide_temps 
 
 
 def generer_solution_clarke_wright(tous_les_clients, depot, matrice_distances, capacite_max, demandes, fenetres_temps, temps_service):

@@ -1,3 +1,28 @@
+"""
+Test Script: Test any initial solution algorithm with Simulated Annealing
+
+You can run this script in two ways:
+1. Interactive mode (default):
+   python test_RS.py
+   
+2. Command-line mode:
+   python test_RS.py <filename> <algorithm>
+
+Supported algorithms:
+  - NN or nearest_neighbor  : Nearest Neighbor
+  - S or solomon_insertion  : Solomon Insertion
+  - TG or tour_geant       : Tour Géant (Hybrid Split)
+  - R or regret            : Regret-K Heuristic
+  - CW or clarke_wright    : Clarke-Wright Savings Algorithm
+
+Examples:
+  python test_RS.py ./Archive/C101.txt NN
+  python test_RS.py ./Archive/C102.txt S
+  python test_RS.py ./Archive/R101.txt TG
+  python test_RS.py ./Archive/RC101.txt R
+  python test_RS.py ./Archive/C201.txt CW
+"""
+
 import math
 import sys
 import time
@@ -8,6 +33,7 @@ from nearestNeighbor import initial_solution_nearest_neighbor as nn_algorithm
 from solomon_inser import initial_solution_solomon_insertion as solomon_algorithm
 from tourGeant import initial_solution_hybrid_split as tour_geant_algorithm
 from regret_algorithm.algo import generer_solution_initiale_randomisee
+from regret_algorithm.clarke_wright import generer_solution_clarke_wright
 
 # Import SA and structures
 from RS_final import (
@@ -197,6 +223,75 @@ def regret_algorithm_wrapper(customers: list, depot: Client, vehicle_capacity: f
     return routes
 
 
+def clarke_wright_wrapper(customers: list, depot: Client, vehicle_capacity: float) -> List[List[Client]]:
+    """
+    Wrapper function to adapt the Clarke-Wright algorithm to work with our unified interface.
+    
+    Converts Client objects to the format expected by the algorithm,
+    runs it, and converts the result back.
+    
+    Args:
+        customers: List of Client objects
+        depot: Depot Client object
+        vehicle_capacity: Maximum vehicle capacity
+        
+    Returns:
+        List of routes, where each route is a list of Client objects
+    """
+    # Build distance matrix (n+1 x n+1, where 0 is depot)
+    n = len(customers)
+    matrice_distances = [[0.0] * (n + 1) for _ in range(n + 1)]
+    
+    # Compute distances between all pairs
+    all_nodes = [depot] + customers
+    for i in range(n + 1):
+        for j in range(n + 1):
+            matrice_distances[i][j] = distance(all_nodes[i], all_nodes[j])
+    
+    # Build demand, time window, and service time dictionaries
+    demandes = {}
+    fenetres_temps = {}
+    temps_service = {}
+    
+    demandes[0] = 0  # Depot has 0 demand
+    fenetres_temps[0] = (depot.ready_time, depot.due_time)
+    temps_service[0] = depot.service_time
+    
+    for i, client in enumerate(customers):
+        client_id = i + 1  # Client IDs start from 1
+        demandes[client_id] = client.demand
+        fenetres_temps[client_id] = (client.ready_time, client.due_time)
+        temps_service[client_id] = client.service_time
+    
+    # List of client IDs (1 to n)
+    tous_les_clients = list(range(1, n + 1))
+    
+    # Call the Clarke-Wright algorithm
+    routes_ids = generer_solution_clarke_wright(
+        tous_les_clients=tous_les_clients,
+        depot=0,
+        matrice_distances=matrice_distances,
+        capacite_max=vehicle_capacity,
+        demandes=demandes,
+        fenetres_temps=fenetres_temps,
+        temps_service=temps_service
+    )
+    
+    # Convert routes from ID format back to Client objects
+    # routes_ids: [[0, 5, 2, 0], [0, 1, 3, 4, 0], ...]
+    # We need: [[client5, client2], [client1, client3, client4], ...]
+    routes = []
+    for route_ids in routes_ids:
+        # Skip the depot markers (0)
+        route_clients = []
+        for client_id in route_ids[1:-1]:  # Exclude first and last depot
+            route_clients.append(customers[client_id - 1])  # Convert ID to index
+        if route_clients:  # Only add non-empty routes
+            routes.append(route_clients)
+    
+    return routes
+
+
 def run_algorithm(algorithm_name: str, customers: list, depot: Client, vehicle_capacity: float) -> List[List[Client]]:
     """
     Run the specified initial solution algorithm
@@ -219,6 +314,10 @@ def run_algorithm(algorithm_name: str, customers: list, depot: Client, vehicle_c
     elif algorithm_name.lower() == 'regret':
         print(f"🔄 Running Regret-K algorithm...")
         return regret_algorithm_wrapper(customers, depot, vehicle_capacity)
+
+    elif algorithm_name.lower() == 'clarke_wright':
+        print(f"🔄 Running Clarke-Wright Savings algorithm...")
+        return clarke_wright_wrapper(customers, depot, vehicle_capacity)
 
     else:
         raise ValueError(f"Unknown algorithm: {algorithm_name}")
@@ -259,13 +358,53 @@ def print_routes(routes: List[List[int]], sa_routes: List[List[int]], inst: Inst
 
 
 def main():
-    if len(sys.argv) < 3:
-        print(__doc__)
-        print("Error: Missing arguments")
-        sys.exit(1)
-
-    filename = sys.argv[1]
-    algorithm = sys.argv[2]
+    # Get inputs from command-line or interactive mode
+    if len(sys.argv) >= 3:
+        # Command-line mode
+        filename = sys.argv[1]
+        algorithm_input = sys.argv[2]
+    else:
+        # Interactive mode
+        print("\n" + "="*70)
+        print("VRPTW INITIAL SOLUTION + SIMULATED ANNEALING TEST")
+        print("="*70)
+        
+        # Get filename
+        while True:
+            filename = "./Archive/"+input("\n📁 Enter the Solomon file (C101): ").strip()+".txt"
+            if filename:
+                break
+            print("   ⚠️  Please enter a valid file path")
+        
+        # Get algorithm with shorthand support
+        print("\nAvailable algorithms:")
+        print("  NN : Nearest Neighbor")
+        print("  S  : Solomon Insertion")
+        print("  TG : Tour Géant (Hybrid Split)")
+        print("  R  : Regret-K Heuristic")
+        print("  CW : Clarke-Wright Savings Algorithm")
+        
+        while True:
+            algorithm_input = input("\n🔧 Enter algorithm (NN/S/TG/R/CW): ").strip().upper()
+            if algorithm_input in ['NN', 'S', 'TG', 'R', 'CW']:
+                break
+            print("   ⚠️  Invalid algorithm. Please choose from: NN, S, TG, R, CW")
+    
+    # Map shorthand to full algorithm names
+    algorithm_map = {
+        'NN': 'nearest_neighbor',
+        'S': 'solomon_insertion',
+        'TG': 'tour_geant',
+        'R': 'regret',
+        'CW': 'clarke_wright',
+        'NEAREST_NEIGHBOR': 'nearest_neighbor',
+        'SOLOMON_INSERTION': 'solomon_insertion',
+        'TOUR_GEANT': 'tour_geant',
+        'REGRET': 'regret',
+        'CLARKE_WRIGHT': 'clarke_wright'
+    }
+    
+    algorithm = algorithm_map.get(algorithm_input.upper(), algorithm_input.lower())
 
     try:
         # Read instance
