@@ -29,6 +29,9 @@ import time
 from typing import List, Tuple, Callable
 
 # Import different algorithms
+from cooling_strategies.adaptive import TemperatureSchedule
+from cooling_strategies.logarithmique import LogarithmicSchedule
+from cooling_strategies.par_paliers import StepSchedule
 from nearestNeighbor import initial_solution_nearest_neighbor as nn_algorithm
 from solomon_inser import initial_solution_solomon_insertion as solomon_algorithm
 from tourGeant import initial_solution_hybrid_split as tour_geant_algorithm
@@ -360,10 +363,11 @@ def print_routes(routes: List[List[int]], sa_routes: List[List[int]], operator_s
 
 def main():
     # Get inputs from command-line or interactive mode
-    if len(sys.argv) >= 3:
+    if len(sys.argv) >= 4:
         # Command-line mode
         filename = sys.argv[1]
         algorithm_input = sys.argv[2]
+        cooling_strategy = sys.argv[3]
     else:
         # Interactive mode
         print("\n" + "="*70)
@@ -407,11 +411,27 @@ def main():
     
     algorithm = algorithm_map.get(algorithm_input.upper(), algorithm_input.lower())
 
+    print("\n select a cooling strategy:")
+    print("  P : Par paliers")
+    print("  L : Logarithmique")
+    print("  A : Adaptive")
+    while True:
+        cooling_input = input("\n🔧 Enter cooling strategy (P/L/A): ").strip().upper()
+        if cooling_input in ['P', 'L', 'A']:
+            break
+        print("   ⚠️  Invalid cooling strategy. Please choose from: P, L, A")
+    cooling_map = {
+        'P': StepSchedule(T_init=100.0, T_min=0.01, alpha=0.90, longueur_palier=100),
+        'L': LogarithmicSchedule(T_init=100.0, T_min=0.01),
+        'A': TemperatureSchedule(T_init=100.0, T_min=0.01)
+    }
+    cooling_strategy = cooling_map.get(cooling_input.upper(), cooling_input.lower())
+
     try:
         # Read instance
-        print(f"\n📂 Reading file: {filename}")
+        print(f"\n Reading file: {filename}")
         depot, customers, vehicle_capacity = read_solomon_file(filename)
-        print(f"   ✓ Loaded {len(customers)} customers, Capacity: {vehicle_capacity}")
+        print(f"    Loaded {len(customers)} customers, Capacity: {vehicle_capacity}")
 
         # Run initial solution algorithm
         print(f"\n{'='*70}")
@@ -457,7 +477,7 @@ def main():
             log_interval=5000,
         )
 
-        result = simulated_annealing(sa_routes, inst, config)
+        result = simulated_annealing(sa_routes, inst, config, custom_schedule=cooling_strategy)
 
         # Display final solution
         print(f"\n{'='*70}")

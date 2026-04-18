@@ -1,7 +1,7 @@
 import math
 import random
 class StepSchedule:
-    def __init__(self, T_init, T_min, alpha=0.90, longueur_palier=100):
+    def __init__(self, T_init, T_min, alpha=0.90, longueur_palier=1000):
         self.T = T_init
         self.T_min = T_min
         self.alpha = alpha  # Baisse plus forte que la version classique (ex: 0.90 au lieu de 0.99)
