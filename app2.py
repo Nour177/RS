@@ -35,6 +35,9 @@ import solomon_inser as solomon
 import tourGeant as tour
 from regret_algorithm import algo as regret_algo
 from regret_algorithm import clarke_wright as cw
+from cooling_strategies.adaptive import TemperatureSchedule
+from cooling_strategies.logarithmique import LogarithmicSchedule
+from cooling_strategies.par_paliers import StepSchedule
 
 BASE_DIR    = Path(__file__).resolve().parent
 ARCHIVE_DIR = BASE_DIR / "Archive"
@@ -356,10 +359,60 @@ class InstrumentedSelector(backend.AdaptiveOperatorSelector):
         self.weight_history.append(self.weights.copy())
 
 
+# Instrumented versions of other cooling strategies
+class InstrumentedLogarithmicSchedule(LogarithmicSchedule):
+    """Instrumented wrapper for LogarithmicSchedule."""
+    _instances: List["InstrumentedLogarithmicSchedule"] = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.temperature_history: List[float] = []
+        self.accepted_history:    List[bool]  = []
+        self.improved_history:    List[bool]  = []
+        self.delta_history:       List[float] = []
+        InstrumentedLogarithmicSchedule._instances.append(self)
+
+    def accept(self, delta: float) -> bool:
+        result = super().accept(delta)
+        self.accepted_history.append(result)
+        self.delta_history.append(delta)
+        return result
+
+    def record(self, accepted: bool, improved: bool):
+        super().record(accepted, improved)
+        self.improved_history.append(improved)
+        self.temperature_history.append(self.T)
+
+
+class InstrumentedStepSchedule(StepSchedule):
+    """Instrumented wrapper for StepSchedule."""
+    _instances: List["InstrumentedStepSchedule"] = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.temperature_history: List[float] = []
+        self.accepted_history:    List[bool]  = []
+        self.improved_history:    List[bool]  = []
+        self.delta_history:       List[float] = []
+        InstrumentedStepSchedule._instances.append(self)
+
+    def accept(self, delta: float) -> bool:
+        result = super().accept(delta)
+        self.accepted_history.append(result)
+        self.delta_history.append(delta)
+        return result
+
+    def record(self, accepted: bool, improved: bool):
+        super().record(accepted, improved)
+        self.improved_history.append(improved)
+        self.temperature_history.append(self.T)
+
+
 def run_sa_instrumented(
     initial_solution: List[List[int]],
     inst: backend.Instance,
     config: backend.SAConfig,
+    custom_schedule = None,
 ) -> backend.SAResult:
     orig_sched = backend.TemperatureSchedule
     orig_sel   = backend.AdaptiveOperatorSelector
@@ -367,25 +420,39 @@ def run_sa_instrumented(
     backend.TemperatureSchedule      = InstrumentedSchedule
     backend.AdaptiveOperatorSelector = InstrumentedSelector
     InstrumentedSchedule._instances.clear()
+    InstrumentedLogarithmicSchedule._instances.clear()
+    InstrumentedStepSchedule._instances.clear()
     InstrumentedSelector._instances.clear()
 
     try:
-        result = backend.simulated_annealing(initial_solution, inst, config)
+        result = backend.simulated_annealing(initial_solution, inst, config, custom_schedule)
 
-        sched = InstrumentedSchedule._instances[-1]
-        sel   = InstrumentedSelector._instances[-1]
+        # Retrieve instrumentation data from whichever schedule was used
+        sched = None
+        if InstrumentedSchedule._instances:
+            sched = InstrumentedSchedule._instances[-1]
+        elif InstrumentedLogarithmicSchedule._instances:
+            sched = InstrumentedLogarithmicSchedule._instances[-1]
+        elif InstrumentedStepSchedule._instances:
+            sched = InstrumentedStepSchedule._instances[-1]
+        
+        sel = InstrumentedSelector._instances[-1] if InstrumentedSelector._instances else None
 
-        result.temperature_history     = sched.temperature_history
-        result.accepted_history        = sched.accepted_history
-        result.improved_history        = sched.improved_history
-        result.delta_history           = sched.delta_history
-        result.operator_weight_history = sel.weight_history
-        result.operator_update_history = sel.operator_history
+        if sched:
+            result.temperature_history     = sched.temperature_history
+            result.accepted_history        = sched.accepted_history
+            result.improved_history        = sched.improved_history
+            result.delta_history           = sched.delta_history
+        if sel:
+            result.operator_weight_history = sel.weight_history
+            result.operator_update_history = sel.operator_history
         return result
     finally:
         backend.TemperatureSchedule      = orig_sched
         backend.AdaptiveOperatorSelector = orig_sel
         InstrumentedSchedule._instances.clear()
+        InstrumentedLogarithmicSchedule._instances.clear()
+        InstrumentedStepSchedule._instances.clear()
         InstrumentedSelector._instances.clear()
 
 
@@ -631,6 +698,14 @@ with st.sidebar:
 
     st.markdown("### Simulated Annealing")
 
+    st.markdown("#### Cooling Strategy")
+    cooling_strategy = st.radio(
+        "Select cooling strategy",
+        ["Adaptive (default)", "Logarithmic", "Step-based"],
+        horizontal=False,
+        help="Choose the temperature cooling schedule strategy.",
+    )
+
     t_init_mode = st.radio(
         "T_init mode",
         ["Manual", "Auto-calibrate"],
@@ -639,23 +714,71 @@ with st.sidebar:
     )
     if t_init_mode == "Manual":
         t_init = st.number_input("T_init", min_value=0.1, value=100.0, step=10.0)
+        acceptance_factor = 0.8  # Default, not used in manual mode
     else:
         t_init = None
+        acceptance_factor = st.slider(
+            "Acceptance factor (for auto-calibration)",
+            min_value=0.1, max_value=0.99, value=0.8, step=0.05,
+            help="Controls target acceptance rate for initial temperature estimation. Higher = warmer initial temp."
+        )
 
     t_min          = st.number_input("T_min", min_value=1e-6, value=0.01, step=0.01, format="%.4f")
-    alpha          = st.slider("Cooling alpha (α)", min_value=0.90, max_value=0.9999,
-                               value=0.995, step=0.001, format="%.4f")
     max_iter       = st.number_input("Max iterations", min_value=1000, value=20000, step=1000)
     penalty_weight = st.number_input("Penalty weight", min_value=1.0, value=1000.0, step=100.0)
 
     with st.expander("Advanced SA parameters", expanded=False):
-        target_acceptance = st.slider("Target acceptance rate", 0.0, 1.0, 0.20, step=0.05)
-        adapt_interval    = st.number_input("Adapt interval",   min_value=50,   value=500,   step=50)
-        reheat_patience   = st.number_input("Reheat patience",  min_value=100,  value=2000,  step=100)
-        reheat_factor     = st.number_input("Reheat factor",    min_value=1.0,  value=2.0,   step=0.1)
-        reaction_factor   = st.slider("Operator reaction factor", 0.0, 1.0, 0.15, step=0.05)
-        segment_update    = st.number_input("Segment update",   min_value=50,   value=200,   step=50)
-        log_interval      = st.number_input("Log interval",     min_value=100,  value=10000, step=500)
+        if cooling_strategy == "Adaptive (default)":
+            st.markdown("##### Adaptive Strategy Parameters")
+            alpha                = st.slider("Cooling alpha (α)", min_value=0.90, max_value=0.9999,
+                                            value=0.995, step=0.001, format="%.4f")
+            target_acceptance    = st.slider("Target acceptance rate", 0.0, 1.0, 0.20, step=0.05)
+            adapt_interval       = st.number_input("Adapt interval", min_value=50, value=500, step=50)
+            reheat_patience      = st.number_input("Reheat patience", min_value=100, value=2000, step=100)
+            reheat_factor        = st.number_input("Reheat factor", min_value=1.0, value=2.0, step=0.1)
+            reaction_factor      = st.slider("Operator reaction factor", 0.0, 1.0, 0.15, step=0.05)
+            segment_update       = st.number_input("Segment update", min_value=50, value=200, step=50)
+            log_interval         = st.number_input("Log interval", min_value=100, value=10000, step=500)
+            # Store strategy-specific params
+            strategy_params = {
+                "alpha": alpha,
+                "target_acceptance": target_acceptance,
+                "adapt_interval": adapt_interval,
+                "reheat_patience": reheat_patience,
+                "reheat_factor": reheat_factor,
+            }
+        elif cooling_strategy == "Logarithmic":
+            st.markdown("##### Logarithmic Strategy Parameters")
+            cooling_factor       = st.slider("Cooling factor (controls cooling speed)", 
+                                            min_value=0.5, max_value=3.0, value=1.0, step=0.1, 
+                                            format="%.1f",
+                                            help="Higher values = faster cooling. T(k) = T_init / (factor * ln(1 + k))")
+            alpha                = 0.995  # Not used, but keep for compatibility
+            target_acceptance    = 0.20
+            adapt_interval       = 500
+            reheat_patience      = 2000
+            reheat_factor        = 2.0
+            reaction_factor      = st.slider("Operator reaction factor", 0.0, 1.0, 0.15, step=0.05)
+            segment_update       = st.number_input("Segment update", min_value=50, value=200, step=50)
+            log_interval         = st.number_input("Log interval", min_value=100, value=10000, step=500)
+            strategy_params = {"cooling_factor": cooling_factor}
+        else:  # Step-based
+            st.markdown("##### Step-based Strategy Parameters")
+            alpha                = st.slider("Cooling alpha (α) per step", min_value=0.50, max_value=0.99,
+                                            value=0.90, step=0.01, format="%.2f")
+            longueur_palier      = st.number_input("Step length (iterations per cooling)", 
+                                                   min_value=100, value=1000, step=100)
+            target_acceptance    = 0.20
+            adapt_interval       = 500
+            reheat_patience      = 2000
+            reheat_factor        = 2.0
+            reaction_factor      = st.slider("Operator reaction factor", 0.0, 1.0, 0.15, step=0.05)
+            segment_update       = st.number_input("Segment update", min_value=50, value=200, step=50)
+            log_interval         = st.number_input("Log interval", min_value=100, value=10000, step=500)
+            strategy_params = {
+                "alpha": alpha,
+                "longueur_palier": longueur_palier,
+            }
 
     st.markdown("---")
 
@@ -730,7 +853,7 @@ if run_clicked:
 
                         effective_t_init = (
                             backend.estimate_initial_temperature(
-                                initial_sol, inst, target_accept=0.8)
+                                initial_sol, inst, target_accept=acceptance_factor)
                             if t_init is None
                             else t_init
                         )
@@ -749,9 +872,38 @@ if run_clicked:
                             segment_update    = int(segment_update),
                             verbose           = False,
                             log_interval      = int(log_interval),
+
                         )
 
-                        sa_result = run_sa_instrumented(initial_sol, inst, config)
+                        # Create custom cooling strategy based on user selection
+                        custom_schedule = None
+                        strategy_info = {"name": cooling_strategy, "params": strategy_params.copy()}
+                        
+                        if cooling_strategy == "Adaptive (default)":
+                            custom_schedule = InstrumentedSchedule(
+                                T_init=effective_t_init,
+                                T_min=float(t_min),
+                                alpha=float(strategy_params.get("alpha", alpha)),
+                                target_acceptance=float(strategy_params.get("target_acceptance", 0.2)),
+                                adapt_interval=int(strategy_params.get("adapt_interval", 500)),
+                                reheat_factor=float(strategy_params.get("reheat_factor", 2.0)),
+                                reheat_patience=int(strategy_params.get("reheat_patience", 2000)),
+                            )
+                        elif cooling_strategy == "Logarithmic":
+                            custom_schedule = InstrumentedLogarithmicSchedule(
+                                T_init=effective_t_init,
+                                T_min=float(t_min),
+                                cooling_factor=float(strategy_params.get("cooling_factor", 1.0)),
+                            )
+                        elif cooling_strategy == "Step-based":
+                            custom_schedule = InstrumentedStepSchedule(
+                                T_init=effective_t_init,
+                                T_min=float(t_min),
+                                alpha=float(strategy_params.get("alpha", 0.90)),
+                                longueur_palier=int(strategy_params.get("longueur_palier", 1000)),
+                            )
+
+                        sa_result = run_sa_instrumented(initial_sol, inst, config, custom_schedule)
 
                     record = {
                         "instance":         instance_file,
@@ -772,6 +924,7 @@ if run_clicked:
                         "instance_obj":     inst,
                         "config":           config,
                         "t_init_used":      effective_t_init,
+                        "cooling_strategy": strategy_info,
                     }
                     st.session_state.vrptw_results.append(record)
                     run_count += 1
@@ -993,6 +1146,18 @@ with tabs[3]:
                 }])
                 st.dataframe(param_df.T.rename(columns={0: "Value"}),
                              use_container_width=True)
+
+            # Display cooling strategy information
+            cooling_strat = result.get("cooling_strategy", {})
+            if cooling_strat:
+                with st.expander("Cooling strategy configuration", expanded=False):
+                    st.markdown(f"**Strategy:** {cooling_strat.get('name', 'Unknown')}")
+                    if cooling_strat.get("params"):
+                        st.markdown("**Strategy-specific parameters:**")
+                        strat_df = pd.DataFrame([cooling_strat["params"]]).T.rename(columns={0: "Value"})
+                        st.dataframe(strat_df, use_container_width=True)
+                    else:
+                        st.markdown("*(No additional parameters for this strategy)*")
 
         st.markdown("---")
 
