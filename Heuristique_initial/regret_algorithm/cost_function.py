@@ -1,7 +1,7 @@
 import time
-from read_file import lire_fichier_vrptw, calculer_matrice_distances
-from algo import generer_solution_initiale_randomisee
-from clarke_wright import generer_solution_clarke_wright
+from outils.read_file import lire_fichier_vrptw, calculer_matrice_distances
+from Heuristique_initial.regret_algorithm.algo import generer_solution_initiale_randomisee
+from Heuristique_initial.regret_algorithm.clarke_wright import generer_solution_clarke_wright
 
 def calculer_distance_totale(solution, matrice_distances):
     """Calcule la distance totale parcourue par tous les camions."""

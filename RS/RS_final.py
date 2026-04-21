@@ -422,13 +422,130 @@ class SAResult:
     elapsed: float        = 0.0
 
 
+# def simulated_annealing(initial_solution: List[List[int]],
+#                         inst: Instance,
+#                         config: SAConfig = SAConfig(),
+#                         custom_schedule = None) -> SAResult:
+
+#     # Vérification stricte de la solution initiale
+#     if not check_faisabilite(initial_solution, inst):
+#         if config.verbose:
+#             print("    Solution initiale infaisable — poursuite avec pénalités")
+
+#     start = time.time()
+
+#     current_sol  = copy.deepcopy(initial_solution)
+#     current_cost = total_cost(current_sol, inst, config.penalty_weight)
+
+#     best_sol  = copy.deepcopy(current_sol)
+#     best_cost = current_cost
+
+#     if custom_schedule is not None:
+#         # On utilise la stratégie injectée (Logarithmique, Paliers, etc.)
+#         schedule = custom_schedule
+#     else:
+#         # Fallback de sécurité : si on ne passe rien, on garde la stratégie par défaut de ton ami
+#         schedule = TemperatureSchedule(
+#             T_init            = config.T_init,
+#             T_min             = config.T_min,
+#             alpha             = config.alpha,
+#             target_acceptance = config.target_acceptance,
+#             adapt_interval    = config.adapt_interval,
+#             reheat_patience   = config.reheat_patience,
+#             reheat_factor     = config.reheat_factor,
+#         )
+
+#     selector = AdaptiveOperatorSelector(
+#         list(OPERATORS.keys()),
+#         reaction_factor=config.reaction_factor
+#     )
+
+#     history = []
+
+#     for it in range(1, config.max_iter + 1):
+
+#         op_name = selector.select()
+#         new_sol = OPERATORS[op_name](current_sol, inst)   # inst passé en paramètre
+#         if new_sol is None:
+#             selector.update(op_name, 0)
+#             schedule.cool()
+#             continue
+
+#         new_cost = total_cost(new_sol, inst, config.penalty_weight)
+#         delta    = new_cost - current_cost
+
+#         accepted = schedule.accept(delta)
+#         improved = new_cost < best_cost
+
+#         if improved:
+#             reward = 3
+#         elif accepted and delta < 0:
+#             reward = 2
+#         elif accepted:
+#             reward = 1
+#         else:
+#             reward = 0
+#         selector.update(op_name, reward)
+
+#         if accepted:
+#             current_sol  = new_sol
+#             current_cost = new_cost
+
+#         if improved:
+#             best_sol  = copy.deepcopy(new_sol)
+#             best_cost = new_cost
+
+#         schedule.record(accepted, improved)
+#         schedule.cool()
+
+#         if it % config.segment_update == 0:
+#             selector.reset_scores()
+
+#         if it % 1000 == 0:
+#             history.append(best_cost)
+
+#         if config.verbose and it % config.log_interval == 0:
+#             # Utilise check_faisabilite pour le log — vérification stricte
+#             feas = "✓" if check_faisabilite(best_sol, inst) else "✗"
+#             print(f"  Iter {it:>7} | T={schedule.T:8.4f} | "
+#                   f"Best={best_cost:10.2f} {feas} | "
+#                   f"Cur={current_cost:10.2f}")
+
+#     elapsed = time.time() - start
+
+#     op_stats = {
+#         n: {"weight": round(selector.weights[n], 4)}
+#         for n in selector.names
+#     }
+
+#     # Vérification finale stricte avec check_faisabilite
+#     solution_feasible = check_faisabilite(best_sol, inst)
+
+#     if config.verbose:
+#         print(f"\n{'='*60}")
+#         print(f"  Terminé en {elapsed:.1f}s")
+#         print(f"  Meilleur coût : {best_cost:.2f}")
+#         print(f"  Faisable      : {solution_feasible}")
+#         print(f"  Nb routes     : {len(best_sol)}")
+#         print(f"{'='*60}")
+
+#     return SAResult(
+#         best_solution  = best_sol,
+#         best_cost      = best_cost,
+#         feasible       = solution_feasible,
+#         history        = history,
+#         operator_stats = op_stats,
+#         elapsed        = elapsed,
+#     )
+
 def simulated_annealing(initial_solution: List[List[int]],
-                        inst: Instance,
-                        config: SAConfig = SAConfig(),
-                        custom_schedule = None) -> SAResult:
+                        inst: 'Instance',
+                        config: 'SAConfig' = SAConfig(),
+                        custom_schedule = None) -> 'SAResult':
 
     # Vérification stricte de la solution initiale
-    if not check_faisabilite(initial_solution, inst):
+    init_feasible = check_faisabilite(initial_solution, inst)
+    if not init_feasible:
         if config.verbose:
             print("    Solution initiale infaisable — poursuite avec pénalités")
 
@@ -440,11 +557,19 @@ def simulated_annealing(initial_solution: List[List[int]],
     best_sol  = copy.deepcopy(current_sol)
     best_cost = current_cost
 
+    # NOUVEAU : Mémoire dédiée à la faisabilité (Oscillation Stratégique)
+    if init_feasible:
+        best_feasible_sol = copy.deepcopy(current_sol)
+        best_feasible_cost = current_cost
+    else:
+        best_feasible_sol = None
+        best_feasible_cost = float('inf')
+
     if custom_schedule is not None:
         # On utilise la stratégie injectée (Logarithmique, Paliers, etc.)
         schedule = custom_schedule
     else:
-        # Fallback de sécurité : si on ne passe rien, on garde la stratégie par défaut de ton ami
+        # Fallback de sécurité : si on ne passe rien, on garde la stratégie par défaut
         schedule = TemperatureSchedule(
             T_init            = config.T_init,
             T_min             = config.T_min,
@@ -476,6 +601,14 @@ def simulated_annealing(initial_solution: List[List[int]],
 
         accepted = schedule.accept(delta)
         improved = new_cost < best_cost
+
+        # NOUVEAU : Mise à jour du meilleur FAISABLE
+        # Optimisation : On ne vérifie la faisabilité que si le coût total est meilleur 
+        # que le meilleur coût faisable connu (pour gagner du temps de calcul)
+        if new_cost < best_feasible_cost:
+            if check_faisabilite(new_sol, inst):
+                best_feasible_sol = copy.deepcopy(new_sol)
+                best_feasible_cost = new_cost
 
         if improved:
             reward = 3
@@ -518,27 +651,34 @@ def simulated_annealing(initial_solution: List[List[int]],
         for n in selector.names
     }
 
-    # Vérification finale stricte avec check_faisabilite
-    solution_feasible = check_faisabilite(best_sol, inst)
+    # NOUVEAU : Sélection de la solution finale à retourner
+    if best_feasible_sol is not None:
+        final_sol = best_feasible_sol
+        final_cost = best_feasible_cost
+        solution_feasible = True
+    else:
+        if config.verbose:
+            print("\n  [!] Avertissement : Aucune solution faisable trouvée. Retour de la meilleure infaisable.")
+        final_sol = best_sol
+        final_cost = best_cost
+        solution_feasible = False
 
     if config.verbose:
         print(f"\n{'='*60}")
         print(f"  Terminé en {elapsed:.1f}s")
-        print(f"  Meilleur coût : {best_cost:.2f}")
+        print(f"  Meilleur coût : {final_cost:.2f}")
         print(f"  Faisable      : {solution_feasible}")
-        print(f"  Nb routes     : {len(best_sol)}")
+        print(f"  Nb routes     : {len(final_sol)}")
         print(f"{'='*60}")
 
     return SAResult(
-        best_solution  = best_sol,
-        best_cost      = best_cost,
+        best_solution  = final_sol,
+        best_cost      = final_cost,
         feasible       = solution_feasible,
         history        = history,
         operator_stats = op_stats,
         elapsed        = elapsed,
     )
-
-
 # ─────────────────────────────────────────────────────────────
 #  8.  UTILITAIRES
 # ─────────────────────────────────────────────────────────────

@@ -32,14 +32,14 @@ from typing import List, Tuple, Callable
 from cooling_strategies.adaptive import TemperatureSchedule
 from cooling_strategies.logarithmique import LogarithmicSchedule
 from cooling_strategies.par_paliers import StepSchedule
-from nearestNeighbor import initial_solution_nearest_neighbor as nn_algorithm
-from solomon_inser import initial_solution_solomon_insertion as solomon_algorithm
-from tourGeant import initial_solution_hybrid_split as tour_geant_algorithm
-from regret_algorithm.algo import generer_solution_initiale_randomisee
-from regret_algorithm.clarke_wright import generer_solution_clarke_wright
+from Heuristique_initial.nearestNeighbor import initial_solution_nearest_neighbor as nn_algorithm
+from Heuristique_initial.solomon_inser import initial_solution_solomon_insertion as solomon_algorithm
+from Heuristique_initial.tourGeant import initial_solution_hybrid_split as tour_geant_algorithm
+from Heuristique_initial.regret_algorithm.algo import generer_solution_initiale_randomisee
+from Heuristique_initial.regret_algorithm.clarke_wright import generer_solution_clarke_wright
 
 # Import SA and structures
-from RS_final import (
+from RS.RS_final import (
     simulated_annealing,
     SAConfig,
     Customer,

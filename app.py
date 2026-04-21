@@ -29,12 +29,12 @@ except ImportError:
     px = go = None
     PLOTLY_OK = False
 
-import RS_final as backend
-import nearestNeighbor as nn
-import solomon_inser as solomon
-import tourGeant as tour
-from regret_algorithm import algo as regret_algo
-from regret_algorithm import clarke_wright as cw
+import RS.RS_final as backend
+import Heuristique_initial.nearestNeighbor as nn
+import Heuristique_initial.solomon_inser as solomon
+import Heuristique_initial.tourGeant as tour
+from Heuristique_initial.regret_algorithm import algo as regret_algo
+from Heuristique_initial.regret_algorithm import clarke_wright as cw
 from cooling_strategies.adaptive import TemperatureSchedule
 from cooling_strategies.logarithmique import LogarithmicSchedule
 from cooling_strategies.par_paliers import StepSchedule
@@ -960,7 +960,7 @@ st.markdown("---")
 # ─────────────────────────────────────────────────────────────
 #  TABS
 # ─────────────────────────────────────────────────────────────
-tabs = st.tabs(["Experiments", "Routes", "Comparison", "SA Analysis", "Diagnostics"])
+tabs = st.tabs(["Experiments", "Routes", "Comparison", "SA Analysis"])
 
 
 # ══════════════════════════════════════════════════════════════
@@ -992,12 +992,6 @@ with tabs[0]:
                 f'<div class="metric-value" style="font-size:1rem">{best_row["Heuristic"]}</div></div>',
                 unsafe_allow_html=True)
         with c3:
-            feas_count = df["Feasible"].sum()
-            st.markdown(
-                f'<div class="metric-card"><div class="metric-label">Feasible runs</div>'
-                f'<div class="metric-value metric-ok">{feas_count} / {len(df)}</div></div>',
-                unsafe_allow_html=True)
-        with c4:
             avg_imp = df["Improvement %"].mean()
             st.markdown(
                 f'<div class="metric-card"><div class="metric-label">Avg improvement</div>'
@@ -1309,61 +1303,3 @@ with tabs[3]:
         )
 
 
-# ══════════════════════════════════════════════════════════════
-#  TAB 4 — DIAGNOSTICS
-# ══════════════════════════════════════════════════════════════
-with tabs[4]:
-    st.markdown('<div class="section-tag">constraint diagnostics</div>', unsafe_allow_html=True)
-
-    if st.session_state.selected_result is None or not st.session_state.vrptw_results:
-        st.markdown(
-            '<div class="info-box">Select a result in the <b> Routes</b> tab first.</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        result = st.session_state.vrptw_results[st.session_state.selected_result]
-        inst   = result["instance_obj"]
-
-        d_col, f_col = st.columns(2)
-
-        with d_col:
-            st.markdown("**Initial solution**")
-            init_feas = result["initial_feasible"]
-            badge_col = "#2ecc71" if init_feas else "#e74c3c"
-            st.markdown(
-                f'<span style="background:{badge_col};color:#fff;padding:2px 8px;'
-                f'border-radius:4px;font-family:IBM Plex Mono;font-size:0.75rem;">'
-                f'{"FEASIBLE" if init_feas else "INFEASIBLE"}</span>',
-                unsafe_allow_html=True,
-            )
-            diag_init = capture_diagnostics(result["initial_solution"], inst)
-            st.code(diag_init, language=None)
-
-        with f_col:
-            st.markdown("**Final solution**")
-            final_feas = result["feasible"]
-            badge_col  = "#2ecc71" if final_feas else "#e74c3c"
-            st.markdown(
-                f'<span style="background:{badge_col};color:#fff;padding:2px 8px;'
-                f'border-radius:4px;font-family:IBM Plex Mono;font-size:0.75rem;">'
-                f'{"FEASIBLE" if final_feas else "INFEASIBLE"}</span>',
-                unsafe_allow_html=True,
-            )
-            diag_final = capture_diagnostics(result["final_solution"], inst)
-            st.code(diag_final, language=None)
-
-        st.markdown("#### Constraint summary — final solution")
-        rows = []
-        for r_idx, route in enumerate(result["final_solution"]):
-            load = sum(inst.node(i).demand for i in route if i != 0)
-            _, pen, feas = backend.evaluate_route(route, inst)
-            rows.append({
-                "Route":          r_idx + 1,
-                "Customers":      len(route) - 2,
-                "Load":           round(load, 1),
-                "Capacity OK":    load <= inst.vehicle_capacity,
-                "Penalty":        round(pen, 2),
-                "Route feasible": feas,
-            })
-        cstr_df = pd.DataFrame(rows)
-        st.dataframe(cstr_df, use_container_width=True, hide_index=True)
