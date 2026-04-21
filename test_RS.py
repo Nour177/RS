@@ -45,6 +45,7 @@ from RS_final import (
     Customer,
     Instance,
     is_feasible,
+    total_cost,
 )
 
 
@@ -453,7 +454,7 @@ def main():
             print(f"Route {i+1:2d} | Load: {load:6.1f} | Distance: {route_dist:8.2f} | Path: {route}")
 
         print("-"*70)
-        print(f"Initial Total Distance: {total_dist:.2f} | Routes: {len(sa_routes)}")
+        print(f"Initial Total cost: {total_cost(sa_routes, inst):.2f} | Routes: {len(sa_routes)}")
         print(f"Initial Feasible: {'✓' if is_feasible(sa_routes, inst) else '✗'}")
 
         # Run Simulated Annealing
@@ -492,9 +493,9 @@ def main():
         print(f"Algorithm: {algorithm}")
         print(f"File: {filename}")
         print(f"Customers: {len(customers)}")
-        print(f"Initial Cost: {total_dist:.2f}")
+        print(f"Initial Cost: {total_cost(sa_routes, inst):.2f}")
         print(f"Final Cost: {result.best_cost:.2f}")
-        print(f"Improvement: {((total_dist - result.best_cost) / total_dist * 100):.2f}% {'↓' if result.best_cost < total_dist else '↑'}")
+        print(f"Improvement: {((total_cost(sa_routes, inst) - result.best_cost) / total_cost(sa_routes, inst) * 100):.2f}% {'↓' if result.best_cost < total_cost(sa_routes, inst) else '↑'}")
         print(f"Feasible: {'✓' if result.feasible else '✗'}")
         print(f"Final Routes: {len(result.best_solution)}")
         print(f"Elapsed Time: {result.elapsed:.2f}s")

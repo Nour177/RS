@@ -163,12 +163,13 @@ def evaluate_route(route: List[int], inst: Instance
 
 
 def total_cost(solution: List[List[int]], inst: Instance,
-               penalty_weight: float = 1000.0) -> float:
+               penalty_weight: float = 1000.0,
+                 vehicule_weight: float=10000.0) -> float:
     total = 0.0
     for route in solution:
         d, p, _ = evaluate_route(route, inst)
         total += d + penalty_weight * p
-    return total
+    return total + vehicule_weight * len(solution)
 
 
 def is_feasible(solution: List[List[int]], inst: Instance) -> bool:
