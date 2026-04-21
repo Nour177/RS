@@ -1,10 +1,9 @@
 import pandas as pd
 import json
-import random
 from pathlib import Path
 
-import RS_final as backend
-from app2 import build_heuristic_solution
+import RS.RS_final as backend
+from app import build_heuristic_solution
 from cooling_strategies.adaptive import TemperatureSchedule
 from cooling_strategies.logarithmique import LogarithmicSchedule
 from cooling_strategies.par_paliers import StepSchedule
