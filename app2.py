@@ -488,8 +488,11 @@ def make_result_dataframe(results: List[Dict]) -> pd.DataFrame:
         "Init feasible":  r["initial_feasible"],
         "Feasible":       r["feasible"],
         "Time (s)":       round(r["elapsed"], 2),
-    } for r in results])
 
+        
+        "Final operator": r.get("final_operator", None),
+
+    } for r in results])
 
 def download_data(results: List[Dict], fmt: str) -> Tuple[bytes, str, str]:
     df = make_result_dataframe(results)
@@ -904,6 +907,13 @@ if run_clicked:
                             )
 
                         sa_result = run_sa_instrumented(initial_sol, inst, config, custom_schedule)
+                        # Extract dominant (final) operator
+                        final_operator = None
+                        if sa_result.operator_stats:
+                            final_operator = max(
+                                sa_result.operator_stats,
+                                key=lambda k: sa_result.operator_stats[k]["weight"]
+                            )
 
                     record = {
                         "instance":         instance_file,
@@ -925,6 +935,9 @@ if run_clicked:
                         "config":           config,
                         "t_init_used":      effective_t_init,
                         "cooling_strategy": strategy_info,
+
+                        # ✅ NEW FIELD
+                        "final_operator": final_operator,
                     }
                     st.session_state.vrptw_results.append(record)
                     run_count += 1
