@@ -2,9 +2,9 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from cost_function import evaluer_performances
-from clarke_wright import generer_solution_clarke_wright
-from algo import generer_solution_initiale_randomisee
+from Heuristique_initial.regret_algorithm.cost_function import evaluer_performances
+from Heuristique_initial.regret_algorithm.clarke_wright import generer_solution_clarke_wright
+from Heuristique_initial.regret_algorithm.algo import generer_solution_initiale_randomisee
 
 def analyser_dossier_et_visualiser(dossier_instances):
     resultats_globaux = []
